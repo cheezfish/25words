@@ -1,0 +1,361 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>25 Words or Less</title>
+    <style>
+        body {
+            font-family: 'Arial', sans-serif;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            min-height: 100vh;
+            background-color: #f0f0f0;
+            color: #333;
+            margin: 0;
+            text-align: center;
+            padding: 20px;
+            box-sizing: border-box;
+        }
+        .container {
+            background-color: #fff;
+            padding: 30px;
+            border-radius: 15px;
+            box-shadow: 0 4px 20px rgba(0, 0, 0, 0.1);
+            width: 100%;
+            max-width: 600px;
+        }
+        h1 {
+            color: #007BFF;
+            margin-bottom: 20px;
+        }
+        .score-display {
+            font-size: 1.5em;
+            margin-bottom: 20px;
+            color: #555;
+        }
+        .game-area {
+            display: none;
+            flex-direction: column;
+            align-items: center;
+        }
+        .word-display {
+            font-size: 2.5em;
+            font-weight: bold;
+            margin-bottom: 20px;
+            color: #333;
+            min-height: 1.5em;
+        }
+        .timer-wordcount {
+            display: flex;
+            justify-content: space-around;
+            width: 100%;
+            margin-bottom: 20px;
+        }
+        .timer, .word-count {
+            font-size: 1.8em;
+            font-weight: bold;
+            color: #E63946;
+            background-color: #f8d7da;
+            padding: 10px 20px;
+            border-radius: 8px;
+            min-width: 100px;
+        }
+        .word-count {
+            color: #4CAF50;
+            background-color: #d4edda;
+        }
+        .buttons {
+            display: flex;
+            gap: 15px;
+            margin-top: 20px;
+        }
+        .btn {
+            padding: 15px 30px;
+            font-size: 1.2em;
+            font-weight: bold;
+            border: none;
+            border-radius: 8px;
+            cursor: pointer;
+            transition: background-color 0.3s, transform 0.1s;
+            flex: 1;
+        }
+        .btn:active {
+            transform: scale(0.98);
+        }
+        #startButton {
+            background-color: #28a745;
+            color: white;
+            width: 100%;
+            padding: 20px;
+        }
+        #startButton:hover { background-color: #218838; }
+        #correctButton {
+            background-color: #007BFF;
+            color: white;
+        }
+        #correctButton:hover { background-color: #0056b3; }
+        #passButton {
+            background-color: #ffc107;
+            color: #333;
+        }
+        #passButton:hover { background-color: #e0a800; }
+        .info-text {
+            font-size: 1.2em;
+            margin-top: 20px;
+            color: #6c757d;
+        }
+    </style>
+</head>
+<body>
+
+<div class="container">
+    <h1>25 Words or Less</h1>
+    
+    <div id="introScreen">
+        <div class="score-display">
+            Your Round Score: <span id="roundScore">0</span>
+        </div>
+        <p class="info-text">
+            To start your turn, press the "Start Round" button below.
+        </p>
+        <button id="startButton" class="btn">Start Round</button>
+    </div>
+
+    <div id="gameScreen" class="game-area">
+        <div class="timer-wordcount">
+            <div class="timer">Time: <span id="timer">60</span>s</div>
+            <div class="word-count">Words: <span id="wordCount">25</span></div>
+        </div>
+        <div class="word-display" id="currentWord"></div>
+        <div class="buttons">
+            <button id="correctButton" class="btn">Correct</button>
+            <button id="passButton" class="btn">Pass</button>
+        </div>
+        <div class="info-text">
+            Guesser must announce when they get a word right. Clue Giver presses "Correct".
+        </div>
+    </div>
+</div>
+
+<script>
+    document.addEventListener('DOMContentLoaded', () => {
+        // --- Configuration ---
+        const ROUND_TIME = 60;
+        const STARTING_WORD_COUNT = 25;
+        const NUM_WORDS_PER_ROUND = 5;
+        const words = [
+            "Apple", "House", "Computer", "Ocean", "Guitar",
+            "Elephant", "Mountain", "Rainbow", "Coffee", "Bicycle",
+            "Book", "Keyboard", "Moon", "Pizza", "Fireplace",
+            "Socks", "Window", "Blanket", "Castle", "Robot",
+            "Spoon", "Forest", "Pillow", "Volcano", "Diamond",
+            "Train", "Jungle", "Cloud", "Speaker", "Wallet"
+        ];
+
+        // --- Game State Variables ---
+        let timerInterval = null;
+        let roundTimeLeft = ROUND_TIME;
+        let wordCountLeft = STARTING_WORD_COUNT;
+        let currentWordIndex = -1;
+        let wordsForRound = [];
+        let passedWords = [];
+        let correctWordsCount = 0;
+        let speechRecognition = null;
+
+        // --- DOM Elements ---
+        const introScreen = document.getElementById('introScreen');
+        const gameScreen = document.getElementById('gameScreen');
+        const startButton = document.getElementById('startButton');
+        const correctButton = document.getElementById('correctButton');
+        const passButton = document.getElementById('passButton');
+        const timerDisplay = document.getElementById('timer');
+        const wordCountDisplay = document.getElementById('wordCount');
+        const currentWordDisplay = document.getElementById('currentWord');
+        const roundScoreDisplay = document.getElementById('roundScore');
+        const infoText = document.querySelector('.info-text');
+
+        // --- Event Listeners ---
+        startButton.addEventListener('click', startRound);
+        correctButton.addEventListener('click', handleCorrect);
+        passButton.addEventListener('click', handlePass);
+
+        // --- Game Functions ---
+        function startRound() {
+            // Reset state for a new round
+            roundTimeLeft = ROUND_TIME;
+            wordCountLeft = STARTING_WORD_COUNT;
+            correctWordsCount = 0;
+            passedWords = [];
+            
+            // Populate words for this round
+            wordsForRound = shuffleArray([...words]).slice(0, NUM_WORDS_PER_ROUND);
+            currentWordIndex = -1;
+
+            // Update displays
+            roundScoreDisplay.textContent = correctWordsCount;
+            timerDisplay.textContent = roundTimeLeft;
+            wordCountDisplay.textContent = wordCountLeft;
+
+            // Show game screen, hide intro
+            introScreen.style.display = 'none';
+            gameScreen.style.display = 'flex';
+
+            // Start listening and game loop
+            startListening();
+            nextWord();
+            startTimer();
+        }
+
+        function startTimer() {
+            if (timerInterval) {
+                clearInterval(timerInterval);
+            }
+            timerInterval = setInterval(() => {
+                roundTimeLeft--;
+                timerDisplay.textContent = roundTimeLeft;
+                
+                if (roundTimeLeft <= 0) {
+                    endRound();
+                }
+            }, 1000);
+        }
+
+        function nextWord() {
+            // Check if there are still words in the main list
+            if (currentWordIndex < wordsForRound.length - 1) {
+                currentWordIndex++;
+                currentWordDisplay.textContent = wordsForRound[currentWordIndex];
+            } else if (passedWords.length > 0) {
+                // Circle back to passed words if main list is exhausted
+                wordsForRound = [...passedWords];
+                passedWords = [];
+                currentWordIndex = 0;
+                currentWordDisplay.textContent = wordsForRound[currentWordIndex];
+            } else {
+                // All words completed (correct or passed)
+                endRound();
+            }
+        }
+
+        function handleCorrect() {
+            correctWordsCount++;
+            roundScoreDisplay.textContent = correctWordsCount;
+
+            // Stop and restart listening to clear the buffer
+            stopListening();
+            setTimeout(startListening, 500);
+
+            // Check if all words are guessed
+            if (correctWordsCount >= NUM_WORDS_PER_ROUND) {
+                endRound();
+            } else {
+                nextWord();
+            }
+        }
+
+        function handlePass() {
+            // Add the current word to the passed list for a second pass
+            if (currentWordIndex !== -1 && !passedWords.includes(wordsForRound[currentWordIndex])) {
+                passedWords.push(wordsForRound[currentWordIndex]);
+            }
+            // Stop and restart listening to clear the buffer
+            stopListening();
+            setTimeout(startListening, 500);
+
+            nextWord();
+        }
+
+        function endRound() {
+            if (timerInterval) {
+                clearInterval(timerInterval);
+                timerInterval = null;
+            }
+            stopListening();
+            
+            // Hide game screen, show intro
+            gameScreen.style.display = 'none';
+            introScreen.style.display = 'block';
+
+            // Display results
+            infoText.innerHTML = `Round Over! You guessed ${correctWordsCount} words correctly.<br>Now it's the next player's turn to press start.`;
+        }
+
+        // --- Speech Recognition Functions ---
+        function initializeSpeechRecognition() {
+            const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
+            if (SpeechRecognition) {
+                speechRecognition = new SpeechRecognition();
+                speechRecognition.continuous = true;
+                speechRecognition.interimResults = false;
+                speechRecognition.lang = 'en-US';
+
+                let previousTranscript = '';
+
+                speechRecognition.onresult = (event) => {
+                    let transcript = '';
+                    for (let i = event.resultIndex; i < event.results.length; i++) {
+                        transcript += event.results[i][0].transcript;
+                    }
+                    
+                    const newWords = transcript.replace(previousTranscript, '').trim();
+                    if (newWords.length > 0) {
+                        const wordCount = newWords.split(' ').length;
+                        wordCountLeft -= wordCount;
+                        wordCountDisplay.textContent = Math.max(0, wordCountLeft);
+                    }
+                    previousTranscript = transcript;
+
+                    if (wordCountLeft <= 0) {
+                        endRound();
+                    }
+                };
+
+                speechRecognition.onerror = (event) => {
+                    console.error('Speech recognition error:', event.error);
+                };
+
+                speechRecognition.onend = () => {
+                    // Automatically restart if not at the end of a round
+                    if (roundTimeLeft > 0) {
+                         speechRecognition.start();
+                    }
+                };
+            } else {
+                alert("Speech recognition is not supported in this browser. Please use a modern browser like Chrome.");
+            }
+        }
+
+        function startListening() {
+            if (speechRecognition) {
+                try {
+                    speechRecognition.start();
+                } catch (e) {
+                    console.error("Speech Recognition already started:", e);
+                }
+            }
+        }
+
+        function stopListening() {
+            if (speechRecognition) {
+                speechRecognition.stop();
+            }
+        }
+        
+        // A utility function to shuffle an array
+        function shuffleArray(array) {
+            for (let i = array.length - 1; i > 0; i--) {
+                const j = Math.floor(Math.random() * (i + 1));
+                [array[i], array[j]] = [array[j], array[i]];
+            }
+            return array;
+        }
+
+        // Initialize speech recognition on page load
+        initializeSpeechRecognition();
+    });
+</script>
+
+</body>
+</html>
